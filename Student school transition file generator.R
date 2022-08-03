@@ -277,14 +277,30 @@ left_join(no_prediction_acc,prediction_acc,by=c("school_code_20","grade_num_20")
 
 # Generate 22-23 data -----------------------------------------------------
 
-# Go through the 21-22 data and flag transitioning students
-
-# Move tranitioning students to their new school
-
-# Increase everyone's grade by 1
-
-# Ouput the data
-
+Projected_Schools_22_23 <-October.21.22.CDE.Data %>%
+  mutate(grade_num = 
+           case_when(
+             grade %in% "004" ~ -1,
+             grade %in% c("006","007") ~ 0,
+             TRUE ~ as.numeric(grade)/10
+           ) #/ case when
+  ) %>%
+  left_join(adv_assignments,
+            by=c(
+              "school_code" = "year_1_code",
+              "grade_num" = "year_1_grade_num"
+            )
+            ) %>%
+  # Remove the columns we're going to replace with new things
+  select(-school_code,
+         -school_name,
+         -district_code,
+         -district_name) %>%
+  rename(school_code = year_2_code) %>%
+  left_join(SchoolDistrictCodes) %>%
+  filter(grade_num != 12)
+  
+write_csv(Projected_Schools_22_23,"Projected_Schools_22_23.csv")
 
 # Estiamte impact ---------------------------------------------------------
 
