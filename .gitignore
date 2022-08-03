@@ -3,3 +3,6 @@
 .RData
 .Ruserdata
 CDE Enrollment Data
+.Rdata
+.httr-oauth
+.DS_Store
