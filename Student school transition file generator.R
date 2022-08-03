@@ -157,11 +157,123 @@ trans_dest_df <- October.21.22.CDE.Data %>%
             by=c("first_name",
                  "last_name","DOB")
   )  %>% #/ inner_join
-  mutate(grade_num_19 = grade_num_20 -1) %>%
-  
-  # 
-  
-  
+  mutate(grade_num_19 = grade_num_20 -1)
+
+
+# For 2019, figure  out where kids go
+
+dest_19 <- trans_dest_df %>%
+  group_by(school_code_19,grade_num_19,school_code_20) %>%
+  summarize(frequency = n()) %>%
+  ungroup()
+
+max_dest_19 <- dest_19 %>%
+  group_by(school_code_19,grade_num_19) %>%
+  arrange(desc(frequency)) %>%
+  slice_max(frequency,n=1) %>%
+  rename(year_1_code = school_code_19,
+         year_1_grade_num = grade_num_19,
+         year_2_code = school_code_20)
+
+# For 2020, figure out where kids go
+dest_20 <- trans_dest_df %>%
+  group_by(school_code_20,grade_num_20,school_code_21) %>%
+  summarize(frequency = n()) %>%
+  ungroup()
+
+max_dest_20 <- dest_20 %>%
+  group_by(school_code_20,grade_num_20) %>%
+  arrange(desc(frequency)) %>%
+  slice_max(frequency,n=1) %>%
+  rename(year_1_code = school_code_20,
+         year_1_grade_num = grade_num_20,
+         year_2_code = school_code_21)
+
+# Let's do a join to compare!
+max_dest_19 %>%
+  inner_join(max_dest_20,
+            by=c("year_1_code",
+                "year_1_grade_num"),
+            suffix= c("_19","_20")) %>%
+  mutate(same = (year_2_code_19 == year_2_code_20)) %>%
+  group_by(year_1_code,year_1_grade_num) %>%
+  summarize(concordant = sum(same/n(),na.rm=TRUE)) %>%
+  ggplot(aes(x=concordant))+
+  geom_histogram(bins = 10) +
+  labs(title = "Percent Similarity between 19-20 and 20-21 Transition Assignments")+
+  xlab("Percent Concordance")+
+  ylab("Number of School/Grade Pairs")
+
+# It also appears from this data that if someone's grade number is 12, they are likely to graduate
+
+# Alright, so they're similar, but not identical. Let's just the higher frequency as the tiebreaker
+adv_assignments <- max_dest_19 %>%
+  full_join(max_dest_20,
+             by=c("year_1_code",
+                  "year_1_grade_num"),
+             suffix= c("_19","_20")) %>%
+  mutate(same = (year_2_code_19 == year_2_code_20)) %>%
+  mutate(same = replace_na(FALSE)) %>%
+  transmute(year_1_code = year_1_code,
+            year_1_grade_num = year_1_grade_num,
+            year_2_code = case_when(
+              year_1_grade_num >= 12 ~ NA_character_,
+              same == TRUE ~ year_2_code_20,
+              !is.na(year_2_code_20) ~ year_2_code_20,
+              TRUE ~ year_2_code_19
+            )) %>%
+  ungroup() %>%
+  tidyr::complete(.,year_1_code,year_1_grade_num) %>%
+  group_by(year_1_code) %>%
+  arrange(desc(year_1_grade_num)) %>%
+  tidyr::fill(.,year_2_code,.direction = "downup"
+  ) %>%
+  ungroup() 
+# 
+
+# Validation --------------------------------------------------------------
+
+# Total accuracy
+prediction_acc_all <-trans_dest_df %>%
+  left_join(adv_assignments,
+            by=c(
+              "school_code_20" = "year_1_code",
+              "grade_num_20" = "year_1_grade_num"
+            )) %>%
+  mutate(same = (school_code_21 == year_2_code)) %>%
+  summarize(concordant = sum(same/n(),na.rm=TRUE)) 
+
+prediction_acc <- trans_dest_df %>%
+  left_join(adv_assignments,
+            by=c(
+              "school_code_20" = "year_1_code",
+              "grade_num_20" = "year_1_grade_num"
+            )) %>%
+  mutate(same = (school_code_21 == year_2_code)) %>%
+  group_by(school_code_20,grade_num_20) %>%
+  summarize(concordant_prediction = sum(same/n(),na.rm=TRUE))
+
+# Compare to not doing anything
+
+no_prediction_acc_all <- trans_dest_df %>%
+  mutate(same = (school_code_21 == school_code_20)) %>%
+  summarize(concordant = sum(same/n(),na.rm=TRUE)) 
+
+no_prediction_acc <-trans_dest_df %>%
+  mutate(same = (school_code_21 == school_code_20)) %>%
+  group_by(school_code_20,grade_num_20) %>%
+  summarize(concordant_no_prediction = sum(same/n(),na.rm=TRUE)) 
+
+left_join(no_prediction_acc,prediction_acc,by=c("school_code_20","grade_num_20")) %>%
+  ggplot()+
+  geom_histogram(aes(x=concordant_prediction),fill="green",alpha = 0.5,
+                 bins=30)+
+  geom_histogram(aes(x=concordant_no_prediction),fill="red",alpha = 0.5,
+                 bins=30)+
+  labs(title = "Accuracy of predictions (green) vs carry forward method (red)",
+       subtitle = "By school/grade pairs")+
+  xlab("Percent concordance")+
+  ylab("")
 
 # Generate 22-23 data -----------------------------------------------------
 
