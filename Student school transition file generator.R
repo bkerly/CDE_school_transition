@@ -240,6 +240,7 @@ prediction_acc_all <-trans_dest_df %>%
               "school_code_20" = "year_1_code",
               "grade_num_20" = "year_1_grade_num"
             )) %>%
+  filter(grade_num_20 != 12) %>%
   mutate(same = (school_code_21 == year_2_code)) %>%
   summarize(concordant = sum(same/n(),na.rm=TRUE)) 
 
@@ -265,6 +266,14 @@ no_prediction_acc <-trans_dest_df %>%
   summarize(concordant_no_prediction = sum(same/n(),na.rm=TRUE)) 
 
 left_join(no_prediction_acc,prediction_acc,by=c("school_code_20","grade_num_20")) %>%
+  mutate(grade_cat = case_when(
+    grade_num_20 < 1 ~ "Pre K / K",
+    grade_num_20 < 6 ~ "Elementary",
+    grade_num_20 < 9 ~ "Middle",
+    grade_num_20 < 13 ~ "High",
+    
+  )
+           ) %>%
   ggplot()+
   geom_histogram(aes(x=concordant_prediction),fill="green",alpha = 0.5,
                  bins=30)+
@@ -273,7 +282,28 @@ left_join(no_prediction_acc,prediction_acc,by=c("school_code_20","grade_num_20")
   labs(title = "Accuracy of predictions (green) vs carry forward method (red)",
        subtitle = "By school/grade pairs")+
   xlab("Percent concordance")+
-  ylab("")
+  ylab("") +
+  facet_wrap(vars(grade_num_20))
+
+left_join(no_prediction_acc,prediction_acc,by=c("school_code_20","grade_num_20")) %>%
+  ungroup() %>%
+  select(-school_code_20) %>%
+  pivot_longer(-grade_num_20,
+               names_to = "method",
+               values_to = "pct_concordance") %>%
+  mutate(method = recode(method,
+                         "concordant_no_prediction" = "Carry Forward",
+           "concordant_prediction" =  "Prediction")
+  ) %>%
+  ggplot()+
+  geom_histogram(aes(x=pct_concordance,fill=method),position = "dodge",
+                 bins=20) + 
+  labs(title = "Accuracy of predictions (green) vs carry forward method (red)",
+       subtitle = "By school/grade pairs")+
+  xlab("Percent concordance")+
+  ylab("") +
+  theme(legend.title = element_blank())+
+  facet_wrap(vars(grade_num_20))
 
 # Generate 22-23 data -----------------------------------------------------
 
